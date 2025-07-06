@@ -12,17 +12,14 @@ function Options() {
       return
     }
     const totalMinutes = hours * 60 + minutes
-    chrome.storage.sync.set(
-      { inactivityTimeoutHours: hours, inactivityTimeoutMinutes: minutes },
-      () => {
-        setStatus("Saved!")
-        setTimeout(() => setStatus(""), 1500)
-        chrome.runtime.sendMessage({
-          type: "UPDATE_TIMEOUT",
-          timeout: totalMinutes
-        })
-      }
-    )
+    chrome.storage.sync.set({ inactivityTimeoutMinutes: totalMinutes }, () => {
+      setStatus("Saved!")
+      setTimeout(() => setStatus(""), 1500)
+      chrome.runtime.sendMessage({
+        type: "UPDATE_TIMEOUT",
+        timeout: totalMinutes
+      })
+    })
   }
 
   return (

@@ -30,7 +30,10 @@ function clearTabAlarm(tabId) {
 
 // Load timeout from storage
 chrome.storage.sync.get(["inactivityTimeoutMinutes"], (result) => {
-  if (result.inactivityTimeoutMinutes) {
+  if (
+    typeof result.inactivityTimeoutMinutes === "number" &&
+    result.inactivityTimeoutMinutes > 0
+  ) {
     INACTIVITY_LIMIT_MS = result.inactivityTimeoutMinutes * 60 * 1000
   }
 })
