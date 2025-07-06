@@ -1,9 +1,28 @@
-import React, { useState } from "react"
+import React, { useEffect, useState } from "react"
+import { Storage } from "@plasmohq/storage"
 
 function Options() {
   const [hours, setHours] = useState(0)
   const [minutes, setMinutes] = useState(0)
   const [status, setStatus] = useState("")
+  const [savedDuration, setSavedDuration] = useState(null)
+  const storage = new Storage({ area: "sync" })
+
+  useEffect(() => {
+    storage.get("inactivityTimeoutMinutes").then((total) => {
+      console.log("ironman total", total)
+      if (typeof total === "number" && total >= 0) {
+        setHours(Math.floor(total / 60))
+        setMinutes(total % 60)
+        setSavedDuration({
+          hours: Math.floor(total / 60),
+          minutes: total % 60
+        })
+      } else {
+        setSavedDuration(null)
+      }
+    })
+  }, [])
 
   const handleSave = () => {
     // Basic validation
@@ -12,8 +31,12 @@ function Options() {
       return
     }
     const totalMinutes = hours * 60 + minutes
-    chrome.storage.sync.set({ inactivityTimeoutMinutes: totalMinutes }, () => {
+    storage.set("inactivityTimeoutMinutes", totalMinutes).then(() => {
       setStatus("Saved!")
+      setSavedDuration({
+        hours: Math.floor(totalMinutes / 60),
+        minutes: totalMinutes % 60
+      })
       setTimeout(() => setStatus(""), 1500)
       chrome.runtime.sendMessage({
         type: "UPDATE_TIMEOUT",
@@ -32,6 +55,17 @@ function Options() {
         height: "100vh",
         fontFamily: "sans-serif"
       }}>
+      {savedDuration ? (
+        <div style={{ fontSize: 18, marginBottom: 16, color: "#555" }}>
+          Current timeout: {savedDuration.hours} hour
+          {savedDuration.hours !== 1 ? "s" : ""} {savedDuration.minutes} minute
+          {savedDuration.minutes !== 1 ? "s" : ""}
+        </div>
+      ) : (
+        <div style={{ fontSize: 18, marginBottom: 16, color: "#555" }}>
+          Current timeout: Not set
+        </div>
+      )}
       <label
         htmlFor="hours-input"
         style={{
