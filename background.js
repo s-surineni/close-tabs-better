@@ -76,8 +76,14 @@ chrome.alarms.onAlarm.addListener((alarm) => {
       if (chrome.runtime.lastError || !tab) return // Tab already closed
       const lastActive = tabActivity[tabId] || 0
       if (Date.now() - lastActive >= INACTIVITY_LIMIT_MS) {
-        chrome.tabs.remove(tabId)
-        delete tabActivity[tabId]
+        // Only close if still unpinned and ungrouped
+        if (!tab.pinned && tab.groupId === -1) {
+          chrome.tabs.remove(tabId)
+          delete tabActivity[tabId]
+        } else {
+          // If tab is now pinned or grouped, stop tracking it
+          delete tabActivity[tabId]
+        }
       } else {
         // User became active again, reschedule
         scheduleTabAlarm(tabId)
