@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from "react"
+
 import { Storage } from "@plasmohq/storage"
+
+import "./options.css"
 
 function Options() {
   const [hours, setHours] = useState(0)
@@ -10,7 +13,6 @@ function Options() {
 
   useEffect(() => {
     storage.get("inactivityTimeoutMinutes").then((total) => {
-      console.log("ironman total", total)
       if (typeof total === "number" && total >= 0) {
         setHours(Math.floor(total / 60))
         setMinutes(total % 60)
@@ -25,7 +27,6 @@ function Options() {
   }, [])
 
   const handleSave = () => {
-    // Basic validation
     if (hours < 0 || hours > 24 || minutes < 0 || minutes > 59) {
       setStatus("Invalid input")
       return
@@ -46,95 +47,85 @@ function Options() {
   }
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "center",
-        alignItems: "center",
-        height: "100vh",
-        fontFamily: "sans-serif"
-      }}>
-      {savedDuration ? (
-        <div style={{ fontSize: 18, marginBottom: 16, color: "#555" }}>
-          Current timeout: {savedDuration.hours} hour
-          {savedDuration.hours !== 1 ? "s" : ""} {savedDuration.minutes} minute
-          {savedDuration.minutes !== 1 ? "s" : ""}
-        </div>
-      ) : (
-        <div style={{ fontSize: 18, marginBottom: 16, color: "#555" }}>
-          Current timeout: Not set
-        </div>
-      )}
-      <label
-        htmlFor="hours-input"
-        style={{
-          fontSize: 18,
-          marginBottom: 4,
-          alignSelf: "flex-start",
-          marginLeft: 8
-        }}
-      >
-        Hours
-      </label>
-      <input
-        id="hours-input"
-        type="number"
-        placeholder="Enter hours (0-24)"
-        min={0}
-        step={1}
-        max={24}
-        value={hours}
-        onChange={(e) => setHours(Number(e.target.value))}
-        style={{ fontSize: 24, padding: 8, width: 200, marginBottom: 16 }}
-      />
-      <label
-        htmlFor="minutes-input"
-        style={{
-          fontSize: 18,
-          marginBottom: 4,
-          alignSelf: "flex-start",
-          marginLeft: 8
-        }}
-      >
-        Minutes
-      </label>
-      <input
-        id="minutes-input"
-        type="number"
-        placeholder="Enter minutes (0-59)"
-        min={0}
-        step={1}
-        max={59}
-        value={minutes}
-        onChange={(e) => setMinutes(Number(e.target.value))}
-        style={{ fontSize: 24, padding: 8, width: 200, marginBottom: 16 }}
-      />
-      <button
-        type="button"
-        onClick={handleSave}
-        style={{
-          fontSize: 20,
-          padding: "8px 32px",
-          borderRadius: 4,
-          border: "none",
-          background: "#1976d2",
-          color: "#fff",
-          cursor: "pointer"
-        }}>
-        Save
-      </button>
-      {status && (
-        <div
-          style={{
-            color: status === "Saved!" ? "green" : "red",
-            marginTop: 18,
-            fontWeight: 500,
-            fontSize: 18
-          }}>
-          {status}
-        </div>
-      )}
+    <div className="options-root">
+      <div className="options-card">
+        <h2 className="options-title">Inactivity Timeout</h2>
+        {savedDuration ? (
+          <div className="options-current">
+            Current timeout: <b>{savedDuration.hours}</b> hour{savedDuration.hours !== 1 ? "s" : ""}{" "}
+            <b>{savedDuration.minutes}</b> minute{savedDuration.minutes !== 1 ? "s" : ""}
+          </div>
+        ) : (
+          <div className="options-current">
+            Current timeout: <b>Not set</b>
+          </div>
+        )}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            handleSave()
+          }}
+          className="options-form"
+        >
+          <div className="options-field">
+            <label htmlFor="hours-input" className="options-label">
+              Hours
+            </label>
+            <input
+              id="hours-input"
+              type="number"
+              placeholder="0-24"
+              min={0}
+              step={1}
+              max={24}
+              value={hours}
+              onChange={(e) => setHours(Number(e.target.value))}
+              className="options-input"
+            />
+          </div>
+          <div className="options-field">
+            <label htmlFor="minutes-input" className="options-label">
+              Minutes
+            </label>
+            <input
+              id="minutes-input"
+              type="number"
+              placeholder="0-59"
+              min={0}
+              step={1}
+              max={59}
+              value={minutes}
+              onChange={(e) => setMinutes(Number(e.target.value))}
+              className="options-input"
+            />
+          </div>
+          <button
+            type="submit"
+            className="options-save-btn"
+            onMouseOver={(e) => {
+              e.currentTarget.style.background = "#1565c0"
+            }}
+            onFocus={(e) => {
+              e.currentTarget.style.background = "#1565c0"
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.background = "#1976d2"
+            }}
+            onBlur={(e) => {
+              e.currentTarget.style.background = "#1976d2"
+            }}
+          >
+            Save
+          </button>
+        </form>
+        {status && (
+          <div
+            className={`options-toast${status === "Saved!" ? "" : " error"}`}
+          >
+            {status}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
