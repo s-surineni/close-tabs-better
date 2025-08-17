@@ -7,7 +7,7 @@ import "./options.css"
 function Options() {
   const [hours, setHours] = useState(0)
   const [minutes, setMinutes] = useState(0)
-  const [status, setStatus] = useState("")
+  const [status, setStatus] = useState("Saved!")
   const [savedDuration, setSavedDuration] = useState(null)
   const storage = new Storage({ area: "sync" })
 

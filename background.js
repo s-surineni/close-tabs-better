@@ -12,6 +12,7 @@ chrome.action.onClicked.addListener(function handleActionClick(tab) {
 // --- Inactivity Auto-Close Logic ---
 let INACTIVITY_LIMIT_MS = 2 * 60 * 60 * 1000 // 2 hours default
 const tabActivity = {}
+let currentActiveTabId = null // Track the current active tab
 
 function scheduleTabAlarm(tabId) {
   chrome.alarms.create(`close-tab-${tabId}`, {
@@ -38,7 +39,7 @@ chrome.storage.sync.get(["inactivityTimeoutMinutes"], (result) => {
   }
 })
 
-// Listen for changes from popup
+// Listen for changes from options page
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === "UPDATE_TIMEOUT") {
     INACTIVITY_LIMIT_MS = msg.timeout * 60 * 1000
@@ -50,7 +51,13 @@ chrome.runtime.onMessage.addListener((msg) => {
 })
 
 // Listen for tab activation (user switches to tab)
-chrome.tabs.onActivated.addListener(({ tabId }) => {
+chrome.tabs.onActivated.addListener(({ tabId, previousTabId }) => {
+  if (previousTabId) {
+    // Update the previous tab's activity time when leaving it
+    updateTabActivity(previousTabId)
+  }
+
+  currentActiveTabId = tabId // Update the current active tab
   updateTabActivity(tabId)
 })
 
@@ -58,6 +65,18 @@ chrome.tabs.onActivated.addListener(({ tabId }) => {
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (changeInfo.status === "complete") {
     updateTabActivity(tabId)
+  }
+
+  // Handle pin state changes
+  if (changeInfo.pinned !== undefined) {
+    if (!changeInfo.pinned && changeInfo.groupId === -1) {
+      // Tab was unpinned and is ungrouped - start tracking it
+      updateTabActivity(tabId)
+    } else if (changeInfo.pinned) {
+      // Tab was pinned - stop tracking it
+      delete tabActivity[tabId]
+      clearTabAlarm(tabId)
+    }
   }
 })
 
@@ -71,6 +90,8 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name.startsWith("close-tab-")) {
     const tabId = parseInt(alarm.name.replace("close-tab-", ""), 10)
+    // Do not close the current active tab
+    if (tabId === currentActiveTabId) return
     // Check if tab is still inactive
     chrome.tabs.get(tabId, (tab) => {
       if (chrome.runtime.lastError || !tab) return // Tab already closed
