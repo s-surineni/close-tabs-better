@@ -1,3 +1,4 @@
+export {}
 chrome.action.onClicked.addListener(function handleActionClick(tab) {
   chrome.tabs.query({ currentWindow: true }, function handleTabsQuery(tabs) {
     const tabsToClose = tabs.filter(
@@ -11,17 +12,68 @@ chrome.action.onClicked.addListener(function handleActionClick(tab) {
 
 // --- Inactivity Auto-Close Logic ---
 let INACTIVITY_LIMIT_MS = 2 * 60 * 60 * 1000 // 2 hours default
+const STORAGE_KEY_INACTIVITY_TIMEOUT_MINUTES = "inactivityTimeoutMinutes"
 const tabActivity = {}
 let currentActiveTabId = null // Track the current active tab
+const DEBUG = true
+
+function debugLog(...args) {
+  // eslint-disable-next-line no-console
+  if (DEBUG) console.log("[close-tabs-better]", ...args)
+}
+
+// Helper to include tab title in logs when we have a tabId
+function debugTabLog(message, tabId, details = {}) {
+  try {
+    chrome.tabs.get(tabId, (tab) => {
+      const tabName = !chrome.runtime.lastError && tab ? tab.title : undefined
+      debugLog(message, { tabId, tabName, ...details })
+    })
+  } catch (e) {
+    debugLog(message, { tabId, tabName: undefined, ...details })
+  }
+}
+
+function formatLocal(ms) {
+  try {
+    return new Date(ms).toLocaleString(undefined, {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+      timeZoneName: "short"
+    })
+  } catch (e) {
+    return new Date(ms).toString()
+  }
+}
 
 function scheduleTabAlarm(tabId) {
+  const now = Date.now()
+  const fireAt = now + INACTIVITY_LIMIT_MS
+  debugTabLog("scheduleTabAlarm", tabId, {
+    now: formatLocal(now),
+    fireAt: formatLocal(fireAt),
+    delayMinutes: Math.round(INACTIVITY_LIMIT_MS / 60000),
+    INACTIVITY_LIMIT_MS
+  })
   chrome.alarms.create(`close-tab-${tabId}`, {
-    when: Date.now() + INACTIVITY_LIMIT_MS
+    when: fireAt
   })
 }
 
 function updateTabActivity(tabId) {
-  tabActivity[tabId] = Date.now()
+  const now = Date.now()
+  const prev = tabActivity[tabId]
+  tabActivity[tabId] = now
+  debugTabLog("updateTabActivity", tabId, {
+    previous: prev ? formatLocal(prev) : null,
+    now: formatLocal(now),
+    deltaSeconds: prev ? Math.round((now - prev) / 1000) : null
+  })
   scheduleTabAlarm(tabId)
 }
 
@@ -29,95 +81,221 @@ function clearTabAlarm(tabId) {
   chrome.alarms.clear(`close-tab-${tabId}`)
 }
 
-// Load timeout from storage
-chrome.storage.sync.get(["inactivityTimeoutMinutes"], (result) => {
-  if (
-    typeof result.inactivityTimeoutMinutes === "number" &&
-    result.inactivityTimeoutMinutes > 0
-  ) {
-    INACTIVITY_LIMIT_MS = result.inactivityTimeoutMinutes * 60 * 1000
-  }
-})
-
-// Listen for changes from options page
-chrome.runtime.onMessage.addListener((msg) => {
-  if (msg.type === "UPDATE_TIMEOUT") {
-    INACTIVITY_LIMIT_MS = msg.timeout * 60 * 1000
-    // Reschedule all alarms
-    Object.keys(tabActivity).forEach((tabId) => {
-      scheduleTabAlarm(Number(tabId))
+// Async settings bootstrap using await to eliminate startup races
+function getStoredTimeoutMinutes() {
+  return new Promise((resolve) => {
+    chrome.storage.sync.get([STORAGE_KEY_INACTIVITY_TIMEOUT_MINUTES], (res) => {
+      const raw = res[STORAGE_KEY_INACTIVITY_TIMEOUT_MINUTES]
+      const normalized = typeof raw === "number" ? raw : Number(raw)
+      resolve(normalized)
     })
-  }
-})
+  })
+}
 
-// Listen for tab activation (user switches to tab)
-chrome.tabs.onActivated.addListener(({ tabId, previousTabId }) => {
-  if (previousTabId) {
-    // Update the previous tab's activity time when leaving it
-    updateTabActivity(previousTabId)
-  }
+async function init() {
+  try {
+    const minutes = await getStoredTimeoutMinutes()
+    debugLog("init: loaded timeout from storage", {
+      minutes,
+      type: typeof minutes,
+      loadedAt: formatLocal(Date.now())
+    })
 
-  currentActiveTabId = tabId // Update the current active tab
-  updateTabActivity(tabId)
-})
-
-// Listen for tab updates (navigation, reload, etc.)
-chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
-  if (changeInfo.status === "complete") {
-    updateTabActivity(tabId)
-  }
-
-  // Handle pin state changes
-  if (changeInfo.pinned !== undefined) {
-    if (!changeInfo.pinned && changeInfo.groupId === -1) {
-      // Tab was unpinned and is ungrouped - start tracking it
-      updateTabActivity(tabId)
-    } else if (changeInfo.pinned) {
-      // Tab was pinned - stop tracking it
-      delete tabActivity[tabId]
-      clearTabAlarm(tabId)
+    if (typeof minutes === "number" && minutes > 0) {
+      INACTIVITY_LIMIT_MS = minutes * 60 * 1000
+      debugLog("init: applied stored timeout", {
+        minutes,
+        INACTIVITY_LIMIT_MS,
+        hours: Math.round(INACTIVITY_LIMIT_MS / 3600000)
+      })
+    } else {
+      debugLog("init: using default timeout", {
+        INACTIVITY_LIMIT_MS,
+        hours: Math.round(INACTIVITY_LIMIT_MS / 3600000)
+      })
     }
-  }
-})
-
-// Listen for tab removal (cleanup)
-chrome.tabs.onRemoved.addListener((tabId) => {
-  delete tabActivity[tabId]
-  clearTabAlarm(tabId)
-})
-
-// Listen for alarm to close tab
-chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name.startsWith("close-tab-")) {
-    const tabId = parseInt(alarm.name.replace("close-tab-", ""), 10)
-    // Do not close the current active tab
-    if (tabId === currentActiveTabId) return
-    // Check if tab is still inactive
-    chrome.tabs.get(tabId, (tab) => {
-      if (chrome.runtime.lastError || !tab) return // Tab already closed
-      const lastActive = tabActivity[tabId] || 0
-      if (Date.now() - lastActive >= INACTIVITY_LIMIT_MS) {
-        // Only close if still unpinned and ungrouped
-        if (!tab.pinned && tab.groupId === -1) {
-          chrome.tabs.remove(tabId)
-          delete tabActivity[tabId]
-        } else {
-          // If tab is now pinned or grouped, stop tracking it
-          delete tabActivity[tabId]
-        }
-      } else {
-        // User became active again, reschedule
-        scheduleTabAlarm(tabId)
-      }
+  } catch (error) {
+    debugLog("init: error loading timeout, using default", {
+      error: error.message
     })
   }
-})
 
-// On extension startup, initialize activity for all tabs
-chrome.tabs.query({}, (tabs) => {
-  tabs.forEach((tab) => {
-    if (!tab.pinned && tab.groupId === -1) {
-      updateTabActivity(tab.id)
+  // Schedule alarms for any activity recorded before settings were ready (likely none now)
+  Object.keys(tabActivity).forEach((tabId) => {
+    scheduleTabAlarm(Number(tabId))
+  })
+
+  // Register listeners after settings are loaded to avoid races
+  // Listen for changes from options page
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.type === "UPDATE_TIMEOUT") {
+      INACTIVITY_LIMIT_MS = msg.timeout * 60 * 1000
+      // Reschedule all alarms
+      Object.keys(tabActivity).forEach((tabId) => {
+        scheduleTabAlarm(Number(tabId))
+      })
     }
   })
+
+  // Listen for tab activation (user switches to tab)
+  chrome.tabs.onActivated.addListener(({ tabId, previousTabId }) => {
+    try {
+      chrome.tabs.get(tabId, (toTab) => {
+        if (previousTabId) {
+          chrome.tabs.get(previousTabId, (fromTab) => {
+            debugLog("onActivated", {
+              from: previousTabId,
+              fromTabName:
+                !chrome.runtime.lastError && fromTab
+                  ? fromTab.title
+                  : undefined,
+              to: tabId,
+              toTabName:
+                !chrome.runtime.lastError && toTab ? toTab.title : undefined
+            })
+          })
+        } else {
+          debugLog("onActivated", {
+            from: previousTabId,
+            fromTabName: undefined,
+            to: tabId,
+            toTabName:
+              !chrome.runtime.lastError && toTab ? toTab.title : undefined
+          })
+        }
+      })
+    } catch (e) {
+      debugLog("onActivated", { from: previousTabId, to: tabId })
+    }
+    if (previousTabId) {
+      // Update the previous tab's activity time when leaving it
+      updateTabActivity(previousTabId)
+    }
+
+    currentActiveTabId = tabId // Update the current active tab
+    updateTabActivity(tabId)
+  })
+
+  // Listen for tab updates (navigation, reload, etc.)
+  chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+    if (changeInfo.status === "complete") {
+      updateTabActivity(tabId)
+    }
+
+    // Handle pin state changes
+    if (changeInfo.pinned !== undefined) {
+      debugTabLog("pinChange", tabId, {
+        pinned: changeInfo.pinned,
+        groupId: changeInfo.groupId
+      })
+      if (!changeInfo.pinned && changeInfo.groupId === -1) {
+        // Tab was unpinned and is ungrouped - start tracking it
+        updateTabActivity(tabId)
+      } else if (changeInfo.pinned) {
+        // Tab was pinned - stop tracking it
+        delete tabActivity[tabId]
+        clearTabAlarm(tabId)
+      }
+    }
+  })
+
+  // Listen for tab removal (cleanup)
+  chrome.tabs.onRemoved.addListener((tabId) => {
+    debugTabLog("onRemoved", tabId)
+    delete tabActivity[tabId]
+    clearTabAlarm(tabId)
+  })
+
+  // Listen for alarm to close tab
+  chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name.startsWith("close-tab-")) {
+      const tabId = parseInt(alarm.name.replace("close-tab-", ""), 10)
+      const firedAt = formatLocal(Date.now())
+      // Fetch tab info to include title in the log and then evaluate
+      chrome.tabs.get(tabId, (tab) => {
+        if (chrome.runtime.lastError || !tab) {
+          debugLog("onAlarm fired", {
+            time: firedAt,
+            tabId,
+            tabName: undefined,
+            alarm: alarm.name,
+            currentActiveTabId,
+            note: "tab missing"
+          })
+          return // Tab already closed
+        }
+        debugLog("onAlarm fired", {
+          time: firedAt,
+          tabId,
+          tabName: tab.title,
+          alarm: alarm.name,
+          currentActiveTabId,
+          isCurrentActive: tabId === currentActiveTabId
+        })
+        // Do not close the current active tab
+        if (tabId === currentActiveTabId) {
+          debugLog("skip close: current tab active", {
+            tabId,
+            tabName: tab.title
+          })
+          return
+        }
+        const lastActive = tabActivity[tabId] || 0
+        const inactiveMs = Date.now() - lastActive
+        if (inactiveMs >= INACTIVITY_LIMIT_MS) {
+          // Only close if still unpinned and ungrouped
+          if (!tab.pinned && tab.groupId === -1) {
+            debugLog("closing tab due to inactivity", {
+              tabId,
+              tabName: tab.title,
+              inactiveMs
+            })
+            chrome.tabs.remove(tabId)
+            delete tabActivity[tabId]
+          } else {
+            // If tab is now pinned or grouped, stop tracking it
+            debugLog("stop tracking (pinned/grouped)", {
+              tabId,
+              tabName: tab.title,
+              pinned: tab.pinned,
+              groupId: tab.groupId
+            })
+            delete tabActivity[tabId]
+          }
+        } else {
+          // User became active again, reschedule
+          debugLog("reschedule: recently active", {
+            tabId,
+            tabName: tab.title,
+            inactiveMs
+          })
+          scheduleTabAlarm(tabId)
+        }
+      })
+    }
+  })
+
+  // On extension startup, initialize activity for all tabs
+  chrome.tabs.query({}, (tabs) => {
+    tabs.forEach((tab) => {
+      if (!tab.pinned && tab.groupId === -1) {
+        updateTabActivity(tab.id)
+      }
+    })
+  })
+}
+
+// Plasmo bundles background as an ES module, but some tooling may not allow top-level await.
+// Call init without awaiting to avoid parse errors while still racing early listeners less.
+init()
+
+// Handle service worker restarts (e.g., after screen lock/unlock)
+chrome.runtime.onStartup.addListener(() => {
+  debugLog("onStartup: service worker restarted, reinitializing")
+  init()
+})
+
+chrome.runtime.onInstalled.addListener(() => {
+  debugLog("onInstalled: extension installed/updated, initializing")
+  init()
 })

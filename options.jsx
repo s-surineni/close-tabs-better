@@ -4,6 +4,8 @@ import { Storage } from "@plasmohq/storage"
 
 import "./options.css"
 
+const STORAGE_KEY_INACTIVITY_TIMEOUT_MINUTES = "inactivityTimeoutMinutes"
+
 function Options() {
   const [hours, setHours] = useState(0)
   const [minutes, setMinutes] = useState(0)
@@ -12,7 +14,7 @@ function Options() {
   const storage = new Storage({ area: "sync" })
 
   useEffect(() => {
-    storage.get("inactivityTimeoutMinutes").then((total) => {
+    storage.get(STORAGE_KEY_INACTIVITY_TIMEOUT_MINUTES).then((total) => {
       if (typeof total === "number" && total >= 0) {
         setHours(Math.floor(total / 60))
         setMinutes(total % 60)
@@ -32,18 +34,20 @@ function Options() {
       return
     }
     const totalMinutes = hours * 60 + minutes
-    storage.set("inactivityTimeoutMinutes", totalMinutes).then(() => {
-      setStatus("Saved!")
-      setSavedDuration({
-        hours: Math.floor(totalMinutes / 60),
-        minutes: totalMinutes % 60
+    storage
+      .set(STORAGE_KEY_INACTIVITY_TIMEOUT_MINUTES, totalMinutes)
+      .then(() => {
+        setStatus("Saved!")
+        setSavedDuration({
+          hours: Math.floor(totalMinutes / 60),
+          minutes: totalMinutes % 60
+        })
+        setTimeout(() => setStatus(""), 1500)
+        chrome.runtime.sendMessage({
+          type: "UPDATE_TIMEOUT",
+          timeout: totalMinutes
+        })
       })
-      setTimeout(() => setStatus(""), 1500)
-      chrome.runtime.sendMessage({
-        type: "UPDATE_TIMEOUT",
-        timeout: totalMinutes
-      })
-    })
   }
 
   return (
@@ -65,8 +69,7 @@ function Options() {
             e.preventDefault()
             handleSave()
           }}
-          className="options-form"
-        >
+          className="options-form">
           <div className="options-field">
             <label htmlFor="hours-input" className="options-label">
               Hours
