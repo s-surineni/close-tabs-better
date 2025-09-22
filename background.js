@@ -1,21 +1,15 @@
 export {}
-chrome.action.onClicked.addListener(function handleActionClick(tab) {
-  chrome.tabs.query({ currentWindow: true }, function handleTabsQuery(tabs) {
-    const tabsToClose = tabs.filter(
-      (t) => !t.pinned && t.groupId === -1 && t.id !== tab.id
-    )
-    if (tabsToClose.length > 0) {
-      chrome.tabs.remove(tabsToClose.map((t) => t.id))
-    }
-  })
-})
+
+// --- Constants ---
+const STORAGE_KEY_INACTIVITY_TIMEOUT_MINUTES = "inactivityTimeoutMinutes"
+const STORAGE_KEY_PROTECTED_DOMAINS = "protectedDomains"
 
 // --- Inactivity Auto-Close Logic ---
 let INACTIVITY_LIMIT_MS = 2 * 60 * 60 * 1000 // 2 hours default
-const STORAGE_KEY_INACTIVITY_TIMEOUT_MINUTES = "inactivityTimeoutMinutes"
 const tabActivity = {}
 let currentActiveTabId = null // Track the current active tab
-const DEBUG = true
+// Enable logging only in development mode
+const DEBUG = process.env.NODE_ENV === "development"
 
 function debugLog(...args) {
   // eslint-disable-next-line no-console
@@ -50,6 +44,105 @@ function formatLocal(ms) {
     return new Date(ms).toString()
   }
 }
+
+// Helper functions
+function getStoredProtectedDomains() {
+  return new Promise((resolve) => {
+    chrome.storage.sync.get([STORAGE_KEY_PROTECTED_DOMAINS], (res) => {
+      const domains = res[STORAGE_KEY_PROTECTED_DOMAINS]
+      resolve(Array.isArray(domains) ? domains : [])
+    })
+  })
+}
+
+function isUrlProtected(url, protectedDomains) {
+  if (
+    !url ||
+    !Array.isArray(protectedDomains) ||
+    protectedDomains.length === 0
+  ) {
+    return false
+  }
+
+  try {
+    const urlObj = new URL(url)
+    const hostname = urlObj.hostname.toLowerCase()
+
+    return protectedDomains.some((domain) => {
+      const cleanDomain = domain.toLowerCase().trim()
+      if (!cleanDomain) return false
+
+      // Support both exact domain matches and subdomain matches
+      return hostname === cleanDomain || hostname.endsWith(`.${cleanDomain}`)
+    })
+  } catch (e) {
+    debugLog("isUrlProtected: invalid URL", { url, error: e.message })
+    return false
+  }
+}
+
+function isInstalledApp(tab) {
+  if (!tab || !tab.url) return false
+
+  try {
+    const url = new URL(tab.url)
+
+    // Check for installed app patterns
+    // Edge installed apps often have chrome-extension:// URLs or special schemes
+    if (url.protocol === "chrome-extension:") {
+      return true
+    }
+
+    // Check for PWA patterns (apps installed from Edge)
+    // These often have specific URL patterns or are in app mode
+    if (
+      tab.url.includes("chrome-extension://") ||
+      tab.url.includes("edge-extension://") ||
+      tab.url.startsWith("chrome://") ||
+      tab.url.startsWith("edge://")
+    ) {
+      return true
+    }
+
+    // Check if tab is in app mode (common for installed PWAs)
+    if (
+      tab.url.includes("?mode=app") ||
+      tab.url.includes("&mode=app") ||
+      tab.url.includes("?app=") ||
+      tab.url.includes("&app=")
+    ) {
+      return true
+    }
+
+    return false
+  } catch (e) {
+    debugLog("isInstalledApp: error checking URL", {
+      url: tab.url,
+      error: e.message
+    })
+    return false
+  }
+}
+
+chrome.action.onClicked.addListener(function handleActionClick(tab) {
+  chrome.tabs.query(
+    { currentWindow: true },
+    async function handleTabsQuery(tabs) {
+      const protectedDomains = await getStoredProtectedDomains()
+      const tabsToClose = tabs.filter(
+        (t) =>
+          !t.pinned &&
+          t.groupId === -1 &&
+          t.id !== tab.id &&
+          !isUrlProtected(t.url, protectedDomains) &&
+          !isInstalledApp(t)
+      )
+      if (tabsToClose.length > 0) {
+        chrome.tabs.remove(tabsToClose.map((t) => t.id))
+      }
+    }
+  )
+})
 
 function scheduleTabAlarm(tabId) {
   const now = Date.now()
@@ -134,6 +227,9 @@ async function init() {
       Object.keys(tabActivity).forEach((tabId) => {
         scheduleTabAlarm(Number(tabId))
       })
+    } else if (msg.type === "UPDATE_PROTECTED_DOMAINS") {
+      debugLog("protected domains updated", { domains: msg.domains })
+      // No need to reschedule alarms as the check happens at close time
     }
   })
 
@@ -207,12 +303,12 @@ async function init() {
   })
 
   // Listen for alarm to close tab
-  chrome.alarms.onAlarm.addListener((alarm) => {
+  chrome.alarms.onAlarm.addListener(async (alarm) => {
     if (alarm.name.startsWith("close-tab-")) {
       const tabId = parseInt(alarm.name.replace("close-tab-", ""), 10)
       const firedAt = formatLocal(Date.now())
       // Fetch tab info to include title in the log and then evaluate
-      chrome.tabs.get(tabId, (tab) => {
+      chrome.tabs.get(tabId, async (tab) => {
         if (chrome.runtime.lastError || !tab) {
           debugLog("onAlarm fired", {
             time: firedAt,
@@ -243,8 +339,43 @@ async function init() {
         const lastActive = tabActivity[tabId] || 0
         const inactiveMs = Date.now() - lastActive
         if (inactiveMs >= INACTIVITY_LIMIT_MS) {
+          // Do not close tabs that are currently playing audio
+          if (tab.audible) {
+            debugLog("skip close: tab is audible", {
+              tabId,
+              tabName: tab.title
+            })
+            scheduleTabAlarm(tabId)
+            return
+          }
+
+          // Do not close installed apps (PWAs from Edge)
+          if (isInstalledApp(tab)) {
+            debugLog("skip close: installed app", {
+              tabId,
+              tabName: tab.title,
+              url: tab.url
+            })
+            scheduleTabAlarm(tabId)
+            return
+          }
+
           // Only close if still unpinned and ungrouped
           if (!tab.pinned && tab.groupId === -1) {
+            // Check if URL is protected before closing
+            const protectedDomains = await getStoredProtectedDomains()
+            if (isUrlProtected(tab.url, protectedDomains)) {
+              debugLog("skip close: protected domain", {
+                tabId,
+                tabName: tab.title,
+                url: tab.url,
+                protectedDomains
+              })
+              // Reschedule the alarm since we're not closing this tab
+              scheduleTabAlarm(tabId)
+              return
+            }
+
             debugLog("closing tab due to inactivity", {
               tabId,
               tabName: tab.title,
