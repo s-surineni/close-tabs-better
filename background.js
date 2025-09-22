@@ -90,6 +90,11 @@ function isInstalledApp(tab) {
     // Check for installed app patterns
     // Edge installed apps often have chrome-extension:// URLs or special schemes
     if (url.protocol === "chrome-extension:") {
+      debugLog("isInstalledApp: detected via chrome-extension protocol", {
+        url: tab.url,
+        protocol: url.protocol,
+        title: tab.title
+      })
       return true
     }
 
@@ -101,6 +106,16 @@ function isInstalledApp(tab) {
       tab.url.startsWith("chrome://") ||
       tab.url.startsWith("edge://")
     ) {
+      debugLog("isInstalledApp: detected via browser/extension URL patterns", {
+        url: tab.url,
+        title: tab.title,
+        matchedPatterns: [
+          tab.url.includes("chrome-extension://") && "chrome-extension://",
+          tab.url.includes("edge-extension://") && "edge-extension://",
+          tab.url.startsWith("chrome://") && "chrome://",
+          tab.url.startsWith("edge://") && "edge://"
+        ].filter(Boolean)
+      })
       return true
     }
 
@@ -111,6 +126,31 @@ function isInstalledApp(tab) {
       tab.url.includes("?app=") ||
       tab.url.includes("&app=")
     ) {
+      debugLog("isInstalledApp: detected via URL parameters", {
+        url: tab.url,
+        title: tab.title,
+        matchedParameters: [
+          tab.url.includes("?mode=app") && "?mode=app",
+          tab.url.includes("&mode=app") && "&mode=app",
+          tab.url.includes("?app=") && "?app=",
+          tab.url.includes("&app=") && "&app="
+        ].filter(Boolean)
+      })
+      return true
+    }
+
+    // Check display mode for PWAs
+    // PWAs can run in standalone, fullscreen, or minimal-ui modes when installed
+    if (
+      tab.displayMode === "standalone" ||
+      tab.displayMode === "fullscreen" ||
+      tab.displayMode === "minimal-ui"
+    ) {
+      debugLog("isInstalledApp: detected PWA via display mode", {
+        url: tab.url,
+        displayMode: tab.displayMode,
+        title: tab.title
+      })
       return true
     }
 
