@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Close Tabs Better BETA - Privacy Policy</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #34495e;
+            margin-top: 30px;
+        }
+        .last-updated {
+            font-style: italic;
+            color: #7f8c8d;
+            margin-bottom: 30px;
+        }
+        .contact-info {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-left: 4px solid #3498db;
+            margin: 20px 0;
+        }
+        .note {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Privacy Policy for Close Tabs Better BETA</h1>
+    <p class="last-updated"><strong>Last Updated:</strong> January 2025</p>
+
+    <h2>Overview</h2>
+    <p>Close Tabs Better BETA ("the Extension") is a Chrome browser extension designed to help users manage their browser tabs by automatically closing inactive tabs and providing manual tab management tools. This privacy policy explains how we handle user data.</p>
+
+    <h2>Data Collection and Usage</h2>
+    
+    <h3>Data We Collect</h3>
+    <p>The Extension collects and stores the following data locally on your device:</p>
+    <ol>
+        <li><strong>User Settings:</strong>
+            <ul>
+                <li>Inactivity timeout duration (in minutes)</li>
+                <li>Protected domain names (websites you want to exclude from auto-closing)</li>
+            </ul>
+        </li>
+        <li><strong>Tab Activity Data:</strong>
+            <ul>
+                <li>Tab IDs and timestamps of when tabs were last active</li>
+                <li>Tab titles (for debugging purposes only, in development mode)</li>
+                <li>Tab URLs (only to check against your protected domains list)</li>
+            </ul>
+        </li>
+    </ol>
+
+    <h3>How We Use Your Data</h3>
+    <ul>
+        <li><strong>Settings Storage:</strong> Your timeout preferences and protected domains are stored locally using Chrome's sync storage API to maintain your preferences across devices</li>
+        <li><strong>Tab Management:</strong> Tab activity timestamps are used to determine which tabs are inactive and eligible for automatic closing</li>
+        <li><strong>Domain Protection:</strong> URLs are checked against your protected domains list to prevent closing tabs from websites you want to keep open</li>
+    </ul>
+
+    <h3>Data Storage</h3>
+    <ul>
+        <li>All data is stored locally on your device using Chrome's built-in storage APIs</li>
+        <li>Settings are synchronized across your Chrome browsers (if you have Chrome sync enabled)</li>
+        <li>No data is transmitted to external servers or third parties</li>
+    </ul>
+
+    <h2>Permissions Used</h2>
+    <p>The Extension requests the following Chrome permissions:</p>
+    <ul>
+        <li><strong><code>storage</code>:</strong> To save your settings (timeout duration and protected domains)</li>
+        <li><strong><code>alarms</code>:</strong> To schedule automatic tab closing based on your inactivity timeout</li>
+        <li><strong><code>tabs</code>:</strong> To access tab information (URLs, titles, activity) for tab management functionality</li>
+    </ul>
+
+    <h2>Data Sharing</h2>
+    <p><strong>We do not share, sell, or transmit any user data to external parties.</strong> All data remains on your device and is only used for the Extension's core functionality.</p>
+
+    <h2>Data Security</h2>
+    <ul>
+        <li>All data is stored using Chrome's secure storage APIs</li>
+        <li>No network requests are made to external servers</li>
+        <li>The Extension operates entirely within your browser environment</li>
+    </ul>
+
+    <h2>User Control</h2>
+    <p>You have full control over your data:</p>
+    <ul>
+        <li><strong>Settings Management:</strong> You can modify or delete your settings at any time through the Extension's options page</li>
+        <li><strong>Data Deletion:</strong> Uninstalling the Extension will remove all stored data</li>
+        <li><strong>Protected Domains:</strong> You can add or remove protected domains at any time</li>
+    </ul>
+
+    <h2>Third-Party Services</h2>
+    <p>The Extension does not integrate with any third-party services or APIs. All functionality is self-contained within the browser.</p>
+
+    <h2>Updates to This Policy</h2>
+    <p>We may update this privacy policy from time to time. Any changes will be reflected in the "Last Updated" date at the top of this policy. Continued use of the Extension after changes constitutes acceptance of the updated policy.</p>
+
+    <div class="contact-info">
+        <h2>Contact Information</h2>
+        <p>If you have any questions about this privacy policy or the Extension's data practices, please contact:</p>
+        <p><strong>Email:</strong> sampath.surineni@gmail.com</p>
+    </div>
+
+    <h2>Compliance</h2>
+    <p>This Extension complies with:</p>
+    <ul>
+        <li>Chrome Web Store Developer Program Policies</li>
+        <li>Chrome Extension Manifest V3 requirements</li>
+        <li>General data protection principles</li>
+    </ul>
+
+    <div class="note">
+        <p><strong>Note:</strong> This Extension is currently in BETA testing. The privacy policy may be updated as the Extension evolves.</p>
+    </div>
+</body>
+</html>
