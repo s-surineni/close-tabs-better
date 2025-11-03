@@ -32,6 +32,8 @@
 .options-section {
   width: 100%;
   margin-bottom: 32px;
+  display: flex;
+    flex-direction: column;
 }
 
 .options-section-title {
@@ -109,7 +111,7 @@
 }
 .options-save-btn {
   font-size: 20px;
-  padding: 12px 0;
+  padding: 12px 32px;
   border-radius: 8px;
   border: none;
   background: #1976d2;
@@ -120,10 +122,12 @@
   box-shadow: 0 2px 8px rgba(25, 118, 210, 0.08);
   transition: background 0.2s;
 }
+
 .options-save-btn:hover,
 .options-save-btn:focus {
   background: #1565c0;
 }
+
 .options-save-btn:active {
   background: #0d47a1;
 }

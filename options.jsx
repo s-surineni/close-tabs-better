@@ -91,7 +91,7 @@ function Options() {
           return true
         }
         // Should have at least one dot for a valid domain
-        if (!domain.includes('.')) {
+        if (!domain.includes(".")) {
           return true
         }
         return false
@@ -171,21 +171,7 @@ function Options() {
               className="options-input"
             />
           </div>
-          <button
-            type="submit"
-            className="options-save-btn"
-            onMouseOver={(e) => {
-              e.currentTarget.style.background = "#1565c0"
-            }}
-            onFocus={(e) => {
-              e.currentTarget.style.background = "#1565c0"
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.background = "#1976d2"
-            }}
-            onBlur={(e) => {
-              e.currentTarget.style.background = "#1976d2"
-            }}>
+          <button type="submit" className="options-save-btn">
             Save Timeout
           </button>
         </form>
@@ -222,19 +208,7 @@ function Options() {
           <button
             type="button"
             onClick={handleSaveDomains}
-            className="options-save-btn"
-            onMouseOver={(e) => {
-              e.currentTarget.style.background = "#1565c0"
-            }}
-            onFocus={(e) => {
-              e.currentTarget.style.background = "#1565c0"
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.background = "#1976d2"
-            }}
-            onBlur={(e) => {
-              e.currentTarget.style.background = "#1976d2"
-            }}>
+            className="options-save-btn">
             Save Domains
           </button>
         </div>
