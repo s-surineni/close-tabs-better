@@ -1,11 +1,13 @@
+import {
+  DEFAULT_TIMEOUT_MINUTES,
+  STORAGE_KEY_INACTIVITY_TIMEOUT_MINUTES,
+  STORAGE_KEY_PROTECTED_DOMAINS
+} from "./constants"
+
 export {}
 
-// --- Constants ---
-const STORAGE_KEY_INACTIVITY_TIMEOUT_MINUTES = "inactivityTimeoutMinutes"
-const STORAGE_KEY_PROTECTED_DOMAINS = "protectedDomains"
-
 // --- Inactivity Auto-Close Logic ---
-let INACTIVITY_LIMIT_MS = 2 * 60 * 60 * 1000 // 2 hours default
+let INACTIVITY_LIMIT_MS = DEFAULT_TIMEOUT_MINUTES * 60 * 1000
 const tabActivity = {}
 let currentActiveTabId = null // Track the current active tab
 // Enable logging only in development mode
