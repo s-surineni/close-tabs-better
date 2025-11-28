@@ -9,7 +9,8 @@ export {}
 // --- Inactivity Auto-Close Logic ---
 let INACTIVITY_LIMIT_MS = DEFAULT_TIMEOUT_MINUTES * 60 * 1000
 const tabActivity = {}
-let currentActiveTabId = null // Track the current active tab
+// Track active tabs per window (windowId -> tabId)
+const activeTabsByWindow = {}
 // Enable logging only in development mode
 const DEBUG = process.env.NODE_ENV === "development"
 
@@ -276,12 +277,13 @@ async function init() {
   })
 
   // Listen for tab activation (user switches to tab)
-  chrome.tabs.onActivated.addListener(({ tabId, previousTabId }) => {
+  chrome.tabs.onActivated.addListener(({ tabId, previousTabId, windowId }) => {
     try {
       chrome.tabs.get(tabId, (toTab) => {
         if (previousTabId) {
           chrome.tabs.get(previousTabId, (fromTab) => {
             debugLog("onActivated", {
+              windowId,
               from: previousTabId,
               fromTabName:
                 !chrome.runtime.lastError && fromTab
@@ -294,6 +296,7 @@ async function init() {
           })
         } else {
           debugLog("onActivated", {
+            windowId,
             from: previousTabId,
             fromTabName: undefined,
             to: tabId,
@@ -303,14 +306,15 @@ async function init() {
         }
       })
     } catch (e) {
-      debugLog("onActivated", { from: previousTabId, to: tabId })
+      debugLog("onActivated", { windowId, from: previousTabId, to: tabId })
     }
     if (previousTabId) {
       // Update the previous tab's activity time when leaving it
       updateTabActivity(previousTabId)
     }
 
-    currentActiveTabId = tabId // Update the current active tab
+    // Track active tab per window
+    activeTabsByWindow[windowId] = tabId
     updateTabActivity(tabId)
   })
 
@@ -342,6 +346,18 @@ async function init() {
     debugTabLog("onRemoved", tabId)
     delete tabActivity[tabId]
     clearTabAlarm(tabId)
+    // Remove from active tabs tracking if it was active
+    Object.keys(activeTabsByWindow).forEach((windowId) => {
+      if (activeTabsByWindow[windowId] === tabId) {
+        delete activeTabsByWindow[windowId]
+      }
+    })
+  })
+  
+  // Listen for window removal (cleanup)
+  chrome.windows.onRemoved.addListener((windowId) => {
+    debugLog("onWindowRemoved", { windowId })
+    delete activeTabsByWindow[windowId]
   })
 
   // Listen for alarm to close tab
@@ -357,24 +373,29 @@ async function init() {
             tabId,
             tabName: undefined,
             alarm: alarm.name,
-            currentActiveTabId,
             note: "tab missing"
           })
           return // Tab already closed
         }
+        
+        // Check if this tab is active in any window
+        const isActiveInAnyWindow = Object.values(activeTabsByWindow).includes(tabId)
         debugLog("onAlarm fired", {
           time: firedAt,
           tabId,
           tabName: tab.title,
           alarm: alarm.name,
-          currentActiveTabId,
-          isCurrentActive: tabId === currentActiveTabId
+          windowId: tab.windowId,
+          isActiveInAnyWindow,
+          activeTabsByWindow
         })
-        // Do not close the current active tab
-        if (tabId === currentActiveTabId) {
-          debugLog("skip close: current tab active", {
+        
+        // Do not close tabs that are currently active in any window
+        if (isActiveInAnyWindow) {
+          debugLog("skip close: tab is active in a window", {
             tabId,
-            tabName: tab.title
+            tabName: tab.title,
+            windowId: tab.windowId
           })
           return
         }
@@ -454,6 +475,17 @@ async function init() {
       if (!tab.pinned && tab.groupId === -1) {
         updateTabActivity(tab.id)
       }
+    })
+  })
+  
+  // Initialize active tabs tracking for all windows
+  chrome.windows.getAll({ populate: false }, (windows) => {
+    windows.forEach((window) => {
+      chrome.tabs.query({ windowId: window.id, active: true }, (tabs) => {
+        if (tabs.length > 0) {
+          activeTabsByWindow[window.id] = tabs[0].id
+        }
+      })
     })
   })
 }
