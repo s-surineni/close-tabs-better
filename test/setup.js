@@ -1,5 +1,5 @@
 import sinon from "sinon-chrome"
-import { beforeEach } from "vitest"
+import { beforeEach, vi } from "vitest"
 
 // Mock Chrome APIs before importing the module under test
 global.chrome = sinon
@@ -17,6 +17,16 @@ global.chromeListeners = {
   actionOnClicked: []
 }
 
+// Helper function to create a mock that yields a value
+function createYieldingMock(value) {
+  return vi.fn((queryInfo, callback) => {
+    if (callback) {
+      callback(value)
+    }
+    return Promise.resolve(value)
+  })
+}
+
 // Reset Chrome mocks before each test
 beforeEach(() => {
   sinon.reset()
@@ -28,46 +38,64 @@ beforeEach(() => {
   
   // Set up default mock implementations
   chrome.runtime.lastError = null
-  chrome.storage.sync = {
-    get: sinon.stub().yields({}),
-    set: sinon.stub().yields()
+
+  // chrome.storage.sync is read-only, so we need to modify its properties
+  if (chrome.storage && chrome.storage.sync) {
+    Object.defineProperty(chrome.storage.sync, 'get', {
+      value: createYieldingMock({}),
+      writable: true,
+      configurable: true
+    })
+    Object.defineProperty(chrome.storage.sync, 'set', {
+      value: createYieldingMock(),
+      writable: true,
+      configurable: true
+    })
+  } else {
+    // Fallback if storage doesn't exist
+    chrome.storage = {
+      sync: {
+        get: createYieldingMock({}),
+        set: createYieldingMock()
+      }
+    }
   }
   
   chrome.tabs = {
-    get: sinon.stub(),
-    query: sinon.stub(),
-    remove: sinon.stub(),
+    get: vi.fn(),
+    query: vi.fn(),
+    remove: vi.fn(),
     onActivated: {
-      addListener: sinon.stub().callsFake((callback) => {
+      addListener: vi.fn((callback) => {
         global.chromeListeners.onActivated.push(callback)
       })
     },
     onUpdated: {
-      addListener: sinon.stub().callsFake((callback) => {
+      addListener: vi.fn((callback) => {
         global.chromeListeners.onUpdated.push(callback)
       })
     },
     onRemoved: {
-      addListener: sinon.stub().callsFake((callback) => {
+      addListener: vi.fn((callback) => {
         global.chromeListeners.onRemoved.push(callback)
       })
     }
   }
   
   chrome.alarms = {
-    create: sinon.stub(),
-    clear: sinon.stub(),
+    create: vi.fn(),
+    clear: vi.fn(),
     onAlarm: {
-      addListener: sinon.stub().callsFake((callback) => {
+      addListener: vi.fn((callback) => {
         global.chromeListeners.onAlarm.push(callback)
       })
     }
   }
   
   chrome.windows = {
-    getAll: sinon.stub(),
+    getAll: vi.fn(),
     onRemoved: {
-      addListener: sinon.stub().callsFake((callback) => {
+      addListener: vi.fn((callback) => {
         global.chromeListeners.onWindowRemoved.push(callback)
       })
     }
@@ -76,17 +104,17 @@ beforeEach(() => {
   chrome.runtime = {
     lastError: null,
     onMessage: {
-      addListener: sinon.stub().callsFake((callback) => {
+      addListener: vi.fn((callback) => {
         global.chromeListeners.onMessage.push(callback)
       })
     },
     onStartup: {
-      addListener: sinon.stub().callsFake((callback) => {
+      addListener: vi.fn((callback) => {
         global.chromeListeners.onStartup.push(callback)
       })
     },
     onInstalled: {
-      addListener: sinon.stub().callsFake((callback) => {
+      addListener: vi.fn((callback) => {
         global.chromeListeners.onInstalled.push(callback)
       })
     }
@@ -94,7 +122,7 @@ beforeEach(() => {
   
   chrome.action = {
     onClicked: {
-      addListener: sinon.stub().callsFake((callback) => {
+      addListener: vi.fn((callback) => {
         global.chromeListeners.actionOnClicked.push(callback)
       })
     }

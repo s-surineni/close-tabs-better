@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
-import sinon from "sinon-chrome"
 
 // These tests verify the multi-window behavior through Chrome API interactions
 // They test the actual behavior that would occur when the extension runs
@@ -34,7 +33,6 @@ describe("Multi-Window Integration Tests", () => {
   beforeEach(() => {
     activeTabsByWindow = {}
     tabActivity = {}
-    sinon.reset()
   })
 
   describe("Real-world Multi-Window Scenarios", () => {
